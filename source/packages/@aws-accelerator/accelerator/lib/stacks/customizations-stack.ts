@@ -19,6 +19,7 @@ import * as fs from 'fs';
 
 import { Logger } from '../logger';
 import { AcceleratorStack, AcceleratorStackProps } from './accelerator-stack';
+import { CfnParameter as CDKCfnParameter } from 'aws-cdk-lib';
 
 export class CustomizationsStack extends AcceleratorStack {
   private stackSetAdministratorAccount: string;
@@ -52,6 +53,12 @@ export class CustomizationsStack extends AcceleratorStack {
         );
         const templateBody = fs.readFileSync(path.join(this.props.configDirPath, stackSet.template), 'utf-8');
 
+        const parameters = stackSet.parameters?.map(parameter => {
+          return new CDKCfnParameter(this, parameter.name, {
+            default: parameter.value,
+          });
+        });
+
         new cdk.aws_cloudformation.CfnStackSet(this, pascalCase(`AWSAccelerator-Custom-${stackSet.name}`), {
           permissionModel: 'SELF_MANAGED',
           stackSetName: stackSet.name,
@@ -71,6 +78,7 @@ export class CustomizationsStack extends AcceleratorStack {
             },
           ],
           templateBody: templateBody,
+          parameters,
         });
       }
     }

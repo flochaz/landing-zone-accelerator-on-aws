@@ -337,6 +337,7 @@ export class CustomizationsConfigTypes {
     regions: t.array(t.region),
     runOrder: t.number,
     template: t.nonEmptyString,
+    parameters: t.optional(t.array(t.cfnParameter)),
     terminationProtection: t.boolean,
   });
 
@@ -347,6 +348,7 @@ export class CustomizationsConfigTypes {
     name: t.nonEmptyString,
     regions: t.array(t.region),
     template: t.nonEmptyString,
+    parameters: t.optional(t.array(t.cfnParameter)),
   });
 
   static readonly customizationConfig = t.interface({
@@ -683,6 +685,11 @@ export class Ec2FirewallConfig implements t.TypeOf<typeof CustomizationsConfigTy
  *       - us-east-1
  *       runOrder: 2
  *       template: cloudformation/InfraStack.yaml
+ *       parameters:
+ *        - name: Parameter1
+ *          value: Value1
+ *       - name: Parameter2
+ *         value: Value2
  *       terminationProtection: true
  *     - deploymentTargets:
  *         accounts:
@@ -729,6 +736,10 @@ export class CloudFormationStackConfig implements t.TypeOf<typeof Customizations
    * This determines whether to enable termination protection for the stack.
    */
   readonly terminationProtection: boolean = false;
+  /**
+   * The parameters to pass to the stack.
+   */
+  readonly parameters: t.CfnParameter[] = [];
 }
 
 /**
@@ -789,6 +800,10 @@ export class CloudFormationStackSetConfig implements t.TypeOf<typeof Customizati
    * The file path to the template file used for deployment.
    */
   readonly template: string = '';
+  /**
+   * The parameters to be passed to the stackset.
+   */
+  readonly parameters: t.CfnParameter[] = [];
 }
 
 /**

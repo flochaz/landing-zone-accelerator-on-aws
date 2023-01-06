@@ -27,6 +27,7 @@ import {
   OrganizationConfig,
   SecurityConfig,
   Region,
+  CfnParameter,
 } from '@aws-accelerator/config';
 import { version } from '../../../../../package.json';
 
@@ -48,6 +49,7 @@ export interface CustomStackProps extends cdk.StackProps {
   readonly stackName: string;
   readonly templateFile: string;
   readonly terminationProtection: boolean;
+  readonly parameters: CfnParameter[];
 }
 export class CustomStack extends cdk.Stack {
   protected props: CustomStackProps;
@@ -59,6 +61,7 @@ export class CustomStack extends cdk.Stack {
 
     new cdk.cloudformation_include.CfnInclude(this, props.stackName, {
       templateFile: path.join(props.configDirPath, props.templateFile),
+      parameters: transformCfnParametersArrayToObject(props.parameters),
     });
 
     new cdk.aws_ssm.StringParameter(this, 'SsmParamStackId', {
@@ -260,4 +263,17 @@ export function getStackDependencies(stackMappings: customStackMapping[]): custo
     }
   }
   return sortedMappings;
+}
+
+function transformCfnParametersArrayToObject(
+  parameters: CfnParameter[],
+): { [parameterName: string]: string } | undefined {
+  if (parameters) {
+    const parameterObject: { [key: string]: string } = {};
+    for (const parameter of parameters) {
+      parameterObject[parameter.name] = parameter.value;
+    }
+    return parameterObject;
+  }
+  return undefined;
 }
