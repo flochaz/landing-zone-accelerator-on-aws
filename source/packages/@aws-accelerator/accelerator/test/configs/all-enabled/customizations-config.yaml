@@ -9,6 +9,9 @@ customizations:
         - us-east-1
       runOrder: 1
       template: cloudformation-templates/custom-s3-bucket.yaml
+      parameters:
+        - name: BucketName
+          value: custom-s3-bucket
       terminationProtection: false
     - deploymentTargets:
         organizationalUnits:

@@ -38,16 +38,6 @@ export interface OperationsStackProps extends AcceleratorStackProps {
   configDirPath: string;
 }
 
-interface PermissionSetMapping {
-  name: string;
-  arn: string;
-}
-
-interface GroupMapping {
-  name: string;
-  principalId: string;
-}
-
 export class OperationsStack extends AcceleratorStack {
   /**
    * List of all the defined SAML Providers
@@ -595,12 +585,17 @@ export class OperationsStack extends AcceleratorStack {
    * needs to be updated.
    */
   private addIdentityCenterPermissionSets(securityAdminAccountId: string, identityCenterInstanceArn: string) {
-    const permissionSetMap: PermissionSetMapping[] = [];
+    const permissionSetMap: cdk.aws_sso.CfnPermissionSet[] = [];
     if (cdk.Stack.of(this).account == securityAdminAccountId) {
       const identityCenter = this.props.iamConfig.identityCenter;
       if (identityCenter?.identityCenterPermissionSets) {
+        let previousPermissionSet;
         for (const identityCenterPermissionSet of identityCenter.identityCenterPermissionSets) {
           const permissionSet = this.createPermissionsSet(identityCenterPermissionSet, identityCenterInstanceArn);
+          if (previousPermissionSet) {
+            permissionSet.addDependsOn(previousPermissionSet);
+          }
+          previousPermissionSet = permissionSet;
           permissionSetMap.push(permissionSet);
         }
       }
@@ -611,12 +606,9 @@ export class OperationsStack extends AcceleratorStack {
   private createPermissionsSet(
     identityCenterPermissionSet: IdentityCenterPermissionSetConfig,
     identityCenterInstanceArn: string,
-  ): PermissionSetMapping {
+  ): cdk.aws_sso.CfnPermissionSet {
     let customerManagedPolicyReferencesList: cdk.aws_sso.CfnPermissionSet.CustomerManagedPolicyReferenceProperty[] = [];
-    const permissionSetPair: PermissionSetMapping = {
-      name: '',
-      arn: '',
-    };
+
     Logger.info(`[operations-stack] Adding Identity Center Permission Set ${identityCenterPermissionSet.name}`);
     if (identityCenterPermissionSet.policies?.customerManaged) {
       customerManagedPolicyReferencesList = this.generateManagedPolicyReferences(
@@ -640,20 +632,17 @@ export class OperationsStack extends AcceleratorStack {
         },
       );
 
-      permissionSetPair.name = permissionSet.name;
-      permissionSetPair.arn = permissionSet.attrPermissionSetArn;
+      return permissionSet;
     } catch (e) {
       Logger.error(e);
       throw e;
     }
-
-    return permissionSetPair;
   }
 
   private addIdentityCenterAssignments(
     securityAdminAccountId: string,
-    permissionSetMap: PermissionSetMapping[],
-    groupMap: GroupMapping[],
+    permissionSetMap: cdk.aws_sso.CfnPermissionSet[],
+    groupMap: cdk.aws_identitystore.CfnGroup[],
     identityCenterInstanceArn: string,
   ) {
     if (cdk.Stack.of(this).account == securityAdminAccountId) {
@@ -693,8 +682,8 @@ export class OperationsStack extends AcceleratorStack {
 
   private createAssignment(
     assignment: IdentityCenterAssignmentConfig,
-    permissionSetMap: PermissionSetMapping[],
-    groupMap: GroupMapping[],
+    permissionSetMap: cdk.aws_sso.CfnPermissionSet[],
+    groupMap: cdk.aws_identitystore.CfnGroup[],
     identityCenterInstanceArn: string,
   ) {
     let listOfTargets = [];
@@ -719,12 +708,12 @@ export class OperationsStack extends AcceleratorStack {
     }
   }
 
-  getPrincipalId(groupMap: GroupMapping[], assignment: IdentityCenterAssignmentConfig): string {
+  getPrincipalId(groupMap: cdk.aws_identitystore.CfnGroup[], assignment: IdentityCenterAssignmentConfig): string {
     let principalId: string | undefined;
     if (assignment.principalId) {
       principalId = assignment.principalId;
     } else if (assignment.principalName && assignment.principalType == 'GROUP') {
-      principalId = groupMap.find(group => group.name == assignment.principalName)?.principalId;
+      principalId = groupMap.find(group => group.displayName == assignment.principalName)?.attrGroupId;
     }
     if (!principalId) {
       throw new Error(`[operations-stack] Principal ID not found for assignment ${assignment.name} principal`);
@@ -732,11 +721,11 @@ export class OperationsStack extends AcceleratorStack {
     return principalId;
   }
 
-  private getPermissionSetArn(permissionSetMap: PermissionSetMapping[], name: string) {
+  private getPermissionSetArn(permissionSetMap: cdk.aws_sso.CfnPermissionSet[], name: string) {
     let permissionSetArn = '';
     for (const permissionSet of permissionSetMap) {
-      if (permissionSet.name == name && permissionSet.arn) {
-        permissionSetArn = permissionSet.arn;
+      if (permissionSet.name == name && permissionSet.attrPermissionSetArn) {
+        permissionSetArn = permissionSet.attrPermissionSetArn;
       }
     }
     return permissionSetArn;
@@ -766,7 +755,7 @@ export class OperationsStack extends AcceleratorStack {
     }
   }
   addIdentityCenterGroups(identityStoreId: string) {
-    const groupMap: GroupMapping[] = [];
+    const groupMap: cdk.aws_identitystore.CfnGroup[] = [];
     const identityCenter = this.props.iamConfig.identityCenter;
     if (identityCenter?.identityCenterGroups) {
       for (const identityCenterGroup of identityCenter.identityCenterGroups) {
@@ -776,11 +765,10 @@ export class OperationsStack extends AcceleratorStack {
     }
     return groupMap;
   }
-  createIdentityCenterGroup(identityCenterGroup: IdentityCenterGroupConfig, identityStoreId: string): GroupMapping {
-    const groupPair: GroupMapping = {
-      name: '',
-      principalId: '',
-    };
+  createIdentityCenterGroup(
+    identityCenterGroup: IdentityCenterGroupConfig,
+    identityStoreId: string,
+  ): cdk.aws_identitystore.CfnGroup {
     Logger.info(`[operations-stack] Adding Identity Center Group ${identityCenterGroup.name}`);
 
     try {
@@ -795,14 +783,11 @@ export class OperationsStack extends AcceleratorStack {
         },
       );
 
-      groupPair.name = group.displayName;
-      groupPair.principalId = group.attrGroupId;
+      return group;
     } catch (e) {
       Logger.error(e);
       throw e;
     }
-
-    return groupPair;
   }
 
   private createStackSetExecutionRole(managementAccountId: string) {
